@@ -1,0 +1,58 @@
+# Render blueprint: the client and the server are two separate free services.
+#
+# Free web services sleep after 15 minutes and take ~1 minute to wake. Serving
+# the frontend from the Go binary would mean a visitor stares at a blank tab
+# for that minute, so the frontend is a static site — always instant — and only
+# the WebSocket waits for the server to come back. The client already shows
+# "Reconnecting…" and backs off exponentially while that happens.
+#
+# Render prompts for two values when you apply this blueprint. They cannot be
+# wired automatically: `fromService` only exposes a service's *private network*
+# hostname, which a browser cannot resolve.
+
+services:
+  # ---------------------------------------------------------------------------
+  # Game server
+  # ---------------------------------------------------------------------------
+  - name: dofusjs-api
+    type: web
+    runtime: docker
+    plan: free
+    region: frankfurt
+    dockerfilePath: ./Dockerfile.backend
+    dockerContext: .
+    healthCheckPath: /healthz
+    envVars:
+      - key: PORT
+        value: "8080"
+      - key: TURN_SECONDS
+        value: "45"
+      # The static site's public origin, plus the iOS app's, comma separated:
+      #   https://dofusjs.onrender.com,capacitor://localhost
+      # Locked down so no other origin can open a socket here. The app serves
+      # its page from the bundle, so capacitor://localhost is the origin its
+      # handshake carries; without it the phone is refused with a 403.
+      - key: ALLOWED_ORIGINS
+        sync: false
+
+  # ---------------------------------------------------------------------------
+  # Client
+  # ---------------------------------------------------------------------------
+  - name: dofusjs
+    type: web
+    runtime: static
+    # No `plan` here: a static site has no compute plan at all, so Render
+    # rejects the field outright ("no such plan free for service type web").
+    rootDir: frontend
+    buildCommand: npm ci && npm run build
+    staticPublishPath: ./dist
+    envVars:
+      # The API's public address, e.g. wss://dofusjs-api.onrender.com/ws
+      # Baked into the bundle at build time, so changing it needs a rebuild.
+      - key: VITE_WS_URL
+        sync: false
+    routes:
+      # Client-side routes (/lobby, /game) must survive a direct visit.
+      - type: rewrite
+        source: /*
+        destination: /index.html

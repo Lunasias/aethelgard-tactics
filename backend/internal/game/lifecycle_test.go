@@ -1,0 +1,299 @@
+package game
+
+import (
+	"errors"
+	"testing"
+
+	"game-server/internal/types"
+)
+
+// ---------------------------------------------------------------------------
+// Rematch
+// ---------------------------------------------------------------------------
+
+func TestRestartSetsUpARematchWithTheSameCharacters(t *testing.T) {
+	g := twoPlayerGame(t)
+
+	g.mu.Lock()
+	p := g.players["b"]
+	// Below Ember's damage, so one cast finishes it whatever the critical roll.
+	p.Character.Health = 5
+	g.players["b"] = p
+	g.mu.Unlock()
+
+	if err := g.CastSpell("a", 1, types.Position{X: 0, Y: 3}); err != nil {
+		t.Fatalf("CastSpell: %v", err)
+	}
+	if g.Status() != types.StatusGameOver {
+		t.Fatalf("status = %q, want the game to be over", g.Status())
+	}
+
+	if err := g.Restart("a"); err != nil {
+		t.Fatalf("Restart: %v", err)
+	}
+
+	// Both players are still in the room, so the rematch goes straight back to
+	// choosing cells rather than parking everyone on a button.
+	snap := g.Snapshot()
+	if snap.GameStatus != types.StatusPositionCharacters {
+		t.Errorf("status = %q, want %q", snap.GameStatus, types.StatusPositionCharacters)
+	}
+	if snap.TurnNumber != 0 {
+		t.Errorf("turn number = %d, want a clean slate", snap.TurnNumber)
+	}
+	if winner, over := g.Winner(); over || winner != "" {
+		t.Errorf("winner = %q (over=%v), want it cleared", winner, over)
+	}
+	if len(snap.Players) != 2 {
+		t.Fatalf("%d players survived the restart, want 2", len(snap.Players))
+	}
+	for id, p := range snap.Players {
+		c := p.Character
+		if c.Name == "" {
+			t.Errorf("player %s lost their character", id)
+		}
+		if !c.IsAlive || c.Health != StartingHealth ||
+			c.ActionPoints != StartingActionPoints || c.MovementPoints != StartingMovementPoints {
+			t.Errorf("player %s not restored: %+v", id, c)
+		}
+		// Fresh cells to pick from, and nobody standing on one yet.
+		if c.Position != nil {
+			t.Errorf("player %s kept its place on the board: %+v", id, c)
+		}
+		if len(c.InitialPositions) == 0 {
+			t.Errorf("player %s was offered nowhere to start: %+v", id, c)
+		}
+		if p.HasPositioned || p.IsCurrentTurn || c.IsCurrentTurn {
+			t.Errorf("player %s kept stale flags: %+v", id, p)
+		}
+	}
+}
+
+func TestRestartOnlyAfterTheGameIsOver(t *testing.T) {
+	g := twoPlayerGame(t)
+	if err := g.Restart("a"); !errors.Is(err, ErrWrongPhase) {
+		t.Errorf("Restart mid-game = %v, want ErrWrongPhase", err)
+	}
+}
+
+func TestRematchCanBePlayedThrough(t *testing.T) {
+	g := twoPlayerGame(t)
+
+	g.mu.Lock()
+	p := g.players["b"]
+	// Below Ember's damage, so one cast finishes it whatever the critical roll.
+	p.Character.Health = 5
+	g.players["b"] = p
+	g.mu.Unlock()
+
+	if err := g.CastSpell("a", 1, types.Position{X: 0, Y: 3}); err != nil {
+		t.Fatalf("CastSpell: %v", err)
+	}
+	if err := g.Restart("a"); err != nil {
+		t.Fatalf("Restart: %v", err)
+	}
+
+	// The whole flow has to work a second time.
+	if g.Status() != types.StatusPositionCharacters {
+		t.Fatalf("status = %q, want the placement phase", g.Status())
+	}
+	for _, id := range []string{"a", "b"} {
+		pos := g.Snapshot().Players[id].Character.InitialPositions[0]
+		if err := g.ChooseInitialPosition(id, pos); err != nil {
+			t.Fatalf("ChooseInitialPosition(%s): %v", id, err)
+		}
+	}
+	if g.Status() != types.StatusPlaying {
+		t.Errorf("status = %q, want the rematch to be under way", g.Status())
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Placement visibility
+// ---------------------------------------------------------------------------
+
+// A player who places second would otherwise always know exactly where the
+// first is standing before a single spell has been cast.
+func TestAnOpponentsStartingCellIsHiddenUntilPlayBegins(t *testing.T) {
+	g := NewWithSeed(1)
+	for _, id := range []string{"a", "b"} {
+		if err := g.AddPlayer(id, "User-"+id, look("Player"+id)); err != nil {
+			t.Fatalf("AddPlayer(%s): %v", id, err)
+		}
+	}
+	if g.Status() != types.StatusPositionCharacters {
+		t.Fatalf("status = %q, want %q", g.Status(), types.StatusPositionCharacters)
+	}
+
+	posA := g.Snapshot().Players["a"].Character.InitialPositions[0]
+	if err := g.ChooseInitialPosition("a", posA); err != nil {
+		t.Fatalf("ChooseInitialPosition(a): %v", err)
+	}
+
+	// "a" has placed, "b" has not: the fight has not started.
+	if g.Status() != types.StatusPositionCharacters {
+		t.Fatalf("status = %q, want the placement phase to still be open", g.Status())
+	}
+
+	if pos := g.SnapshotFor("b").Players["a"].Character.Position; pos != nil {
+		t.Errorf("b's view of a's position = %+v, want it withheld", *pos)
+	}
+	if pos := g.SnapshotFor("a").Players["a"].Character.Position; pos == nil {
+		t.Error("a's view of a's own position = nil, want it visible")
+	}
+	if pos := g.Snapshot().Players["a"].Character.Position; pos == nil {
+		t.Error("the unfiltered snapshot must still carry every position")
+	}
+
+	posB := g.Snapshot().Players["b"].Character.InitialPositions[0]
+	if err := g.ChooseInitialPosition("b", posB); err != nil {
+		t.Fatalf("ChooseInitialPosition(b): %v", err)
+	}
+	if g.Status() != types.StatusPlaying {
+		t.Fatalf("status = %q, want the fight under way", g.Status())
+	}
+
+	if pos := g.SnapshotFor("b").Players["a"].Character.Position; pos == nil {
+		t.Error("b's view of a's position once play begins = nil, want it visible")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Leaving
+// ---------------------------------------------------------------------------
+
+func TestLeavingMidGameHandsTheWinToTheSurvivor(t *testing.T) {
+	g := twoPlayerGame(t)
+
+	g.RemovePlayer("b")
+
+	if g.Status() != types.StatusGameOver {
+		t.Fatalf("status = %q, want the game to end on a forfeit", g.Status())
+	}
+	winner, over := g.Winner()
+	if !over || winner != "Playera" {
+		t.Errorf("winner = %q (over=%v), want \"Playera\"", winner, over)
+	}
+}
+
+func TestLeavingPassesPlayToTheNextCharacter(t *testing.T) {
+	g := playingGame(t, map[string]types.Position{
+		"a": {X: 0, Y: 0},
+		"b": {X: 0, Y: 3},
+		"c": {X: 3, Y: 0},
+	}, "a", "b", "c")
+
+	// "a" is acting; removing them must not strand the game.
+	g.RemovePlayer("a")
+
+	if g.Status() != types.StatusPlaying {
+		t.Fatalf("status = %q, want play to continue with two left", g.Status())
+	}
+	acting := currentPlayerID(g)
+	if acting != "b" {
+		t.Errorf("acting player = %q, want \"b\" to take over", acting)
+	}
+	if err := g.EndTurn("b"); err != nil {
+		t.Errorf("the survivor cannot act: %v", err)
+	}
+}
+
+func TestLeavingDuringPlacementReturnsEveryoneToTheLobby(t *testing.T) {
+	g := NewLobbyReadyGame(t)
+	if g.Status() != types.StatusPositionCharacters {
+		t.Fatalf("status = %q, want the placement phase", g.Status())
+	}
+
+	g.RemovePlayer("b")
+
+	if g.Status() != types.StatusCreatingPlayer {
+		t.Errorf("status = %q, want a drop below two players to reopen the lobby", g.Status())
+	}
+	if p := g.Snapshot().Players["a"]; len(p.Character.InitialPositions) != 0 {
+		t.Errorf("the remaining player kept stale placement state: %+v", p)
+	}
+}
+
+func TestRemovingAnUnknownPlayerIsANoOp(t *testing.T) {
+	g := twoPlayerGame(t)
+	g.RemovePlayer("nobody")
+	if n := len(g.Snapshot().Players); n != 2 {
+		t.Errorf("%d players left, want 2", n)
+	}
+	if g.Status() != types.StatusPlaying {
+		t.Errorf("status = %q, want play to be unaffected", g.Status())
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Connection state
+// ---------------------------------------------------------------------------
+
+func TestSetConnectedLeavesTheCharacterOnTheBoard(t *testing.T) {
+	g := twoPlayerGame(t)
+
+	g.SetConnected("b", false)
+
+	p := g.Snapshot().Players["b"]
+	if p.Connected {
+		t.Error("player still marked connected")
+	}
+	if !p.Character.IsAlive || p.Character.Position == nil {
+		t.Errorf("a dropped connection cost the character its place: %+v", p.Character)
+	}
+	if g.Status() != types.StatusPlaying {
+		t.Errorf("status = %q, want the game to keep running", g.Status())
+	}
+
+	g.SetConnected("b", true)
+	if !g.Snapshot().Players["b"].Connected {
+		t.Error("player did not come back as connected")
+	}
+}
+
+func TestNewPlayersStartConnected(t *testing.T) {
+	g := New()
+	if err := g.AddPlayer("a", "User-a", look("Alice")); err != nil {
+		t.Fatalf("AddPlayer: %v", err)
+	}
+	if !g.Snapshot().Players["a"].Connected {
+		t.Error("a freshly created player is not marked connected")
+	}
+}
+
+// A solo room's last human leaving means the room is empty, however many
+// computer opponents are still standing in it. Counting bots kept finished
+// "vs Cpu" rooms in the lobby list forever.
+func TestBotsDoNotKeepARoomAlive(t *testing.T) {
+	g := New()
+	if _, err := g.AddBot(); err != nil {
+		t.Fatalf("AddBot: %v", err)
+	}
+	if err := g.AddPlayer("human", "User-human", look("Alice")); err != nil {
+		t.Fatalf("AddPlayer: %v", err)
+	}
+
+	if g.PlayerCount() != 2 || g.HumanCount() != 1 {
+		t.Fatalf("counts = %d players / %d humans, want 2 and 1", g.PlayerCount(), g.HumanCount())
+	}
+
+	g.RemovePlayer("human")
+	if g.HumanCount() != 0 {
+		t.Errorf("HumanCount = %d after the only human left, want 0", g.HumanCount())
+	}
+	if g.PlayerCount() == 0 {
+		t.Error("the bot was removed too; only the human should have left")
+	}
+}
+
+// NewLobbyReadyGame builds a two-player game sitting in the placement phase.
+func NewLobbyReadyGame(t *testing.T) *Game {
+	t.Helper()
+	g := New()
+	for _, id := range []string{"a", "b"} {
+		if err := g.AddPlayer(id, "User-"+id, look("Player"+id)); err != nil {
+			t.Fatalf("AddPlayer(%s): %v", id, err)
+		}
+	}
+	return g
+}
