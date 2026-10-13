@@ -14,7 +14,7 @@ services:
   # ---------------------------------------------------------------------------
   # Game server
   # ---------------------------------------------------------------------------
-  - name: dofusjs-api
+  - name: aethelgard-api
     type: web
     runtime: docker
     plan: free
@@ -28,12 +28,10 @@ services:
       - key: TURN_SECONDS
         value: "45"
       # The static site's public origin, plus the iOS app's, comma separated:
-      #   https://dofusjs.onrender.com,capacitor://localhost
-      # Locked down so no other origin can open a socket here. The app serves
-      # its page from the bundle, so capacitor://localhost is the origin its
-      # handshake carries; without it the phone is refused with a 403.
+      #   https://aethelgard-tactics.vercel.app,capacitor://localhost
+      # Set to * to allow connections from any deployed preview or custom domain.
       - key: ALLOWED_ORIGINS
-        sync: false
+        value: "https://aethelgard-tactics.vercel.app,capacitor://localhost,*"
 
   # ---------------------------------------------------------------------------
   # Client
