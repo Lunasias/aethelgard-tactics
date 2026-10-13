@@ -9,7 +9,7 @@
         "primary": "#d8ae31",
         "secondary": "#faf3dd"
       },
-      "lore": "Sets things alight and lets them burn. Piles burns onto a target, then sets them all off at once, and leaves the ground on fire behind it.",
+      "lore": "A reincarnated crimson archmage wielding ancient primordial fire. Incinerates the battlefield, stacks explosive embers upon foes, and commands lingering flames.",
       "passive": "Burns stack up to 3 times. Each one does 4 damage at the start of its victim's turn.",
       "spells": [
         "1",
@@ -21,8 +21,8 @@
       "opponent": {
         "name": "Ashka the Kindled",
         "lines": [
-          "Stand still. It is quicker for both of us.",
-          "Embers go out. Mine just took longer than most."
+          "You were summoned to this world only to turn to ash.",
+          "The crimson flame fades... but embers will reignite."
         ]
       },
       "unlockedBy": "",
@@ -37,7 +37,7 @@
         "primary": "#5bd831",
         "secondary": "#e7f9e0"
       },
-      "lore": "Never where you aimed. Strikes from a relay far across the board, throws enemies around, and leaves a storm where they stood.",
+      "lore": "An agile galeblade summoned from beyond the tempest. Strikes across the battlefield via ethereal wind relays, displacing adversaries and leaving howling vortexes.",
       "passive": "Relay: your air spells go out from your relay whenever it reaches, and hit 30% harder from there.",
       "movementPoints": 5,
       "spells": [
@@ -50,8 +50,8 @@
       "opponent": {
         "name": "Sef of the Long Grass",
         "lines": [
-          "You will not see me twice in the same place.",
-          "You caught the wind. Nobody has told me how."
+          "In this realm, the wind never blows in the same place twice.",
+          "You caught the wind... How could an otherworldly traveler match my speed?"
         ]
       },
       "unlockedBy": "pyromancer"
@@ -65,7 +65,7 @@
         "primary": "#315bd8",
         "secondary": "#e0e7f9"
       },
-      "lore": "Slows the fight to a pace only one side can keep. Traps, ice and water decide where the enemy can stand, and its own water heals it.",
+      "lore": "A mystical water sage blessed by the Astral Depths. Manipulates frost, torrents, and aquatic sanctuaries to restrict enemy movement while restoring vitality.",
       "passive": "Your water slows enemies by 1 MP and heals you 5 when you start a turn in it. Water puts fire out.",
       "spells": [
         "11",
@@ -77,8 +77,8 @@
       "opponent": {
         "name": "Mother Brine",
         "lines": [
-          "Come closer, child. The water is warm.",
-          "The tide turns. Even for me, it seems."
+          "Welcome to the sacred springs, wanderer. Rest peacefully beneath the tides.",
+          "The tide recedes... It seems your otherworldly blessing runs deeper."
         ]
       },
       "unlockedBy": "windwalker",
@@ -93,7 +93,7 @@
         "primary": "#31d8ae",
         "secondary": "#dcf8f1"
       },
-      "lore": "Slow to start and terrible up close. Leaps into reach, drags enemies in, and walls off their way out.",
+      "lore": "An indomitable fortress knight infused with titanic leyline earth. Charges across the field, traps enemies within stone ramparts, and crushes nearby targets with brutal melee force.",
       "passive": "+50% damage against a target right next to you. Hard to move: pushes carry you 2 cells less.",
       "meleeBonus": 50,
       "pushResist": 2,
@@ -108,8 +108,8 @@
       "opponent": {
         "name": "Old Grund",
         "lines": [
-          "Hide behind whatever you like. The rock does not mind.",
-          "Well. Mountains wear down too, I suppose."
+          "No blessing or cheat skill from another world can pierce bedrock.",
+          "Even mountains crumble with time... Well fought, traveler."
         ]
       },
       "unlockedBy": "tidecaller"
